@@ -29,6 +29,16 @@ function createPrismaStub() {
         const row = { id: `family-${wordFamilyItems.length + 1}`, ...data };
         wordFamilyItems.push(row);
         return row;
+      },
+      upsert: async ({ where, create, update }: any) => {
+        const row = wordFamilyItems.find((item) => item.vocabularyItemId === where.vocabularyItemId);
+        if (row) {
+          Object.assign(row, update);
+          return row;
+        }
+        const created = { id: `family-${wordFamilyItems.length + 1}`, ...create };
+        wordFamilyItems.push(created);
+        return created;
       }
     },
     aiLog: { create: async ({ data }: any) => data },
@@ -89,5 +99,34 @@ describe("VocabularyService", () => {
     const item = await new VocabularyService(prisma as never, {} as never).pickDueVocabularyItem("user-1", new Date("2026-06-05T00:00:00.000Z"));
 
     expect(item?.word).toBe("imply");
+  });
+
+  test("updates an existing vocabulary item instead of creating a duplicate", async () => {
+    const prisma = createPrismaStub();
+    prisma.vocabularyItem.findFirst = async ({ where }: any) =>
+      prisma.vocabularyItems.find((item) => item.userId === where.userId && item.normalizedWord === where.normalizedWord) ?? null;
+    const aiProvider = {
+      createVocabularyCard: async () => ({
+        word: "imply",
+        normalized_word: "imply",
+        part_of_speech: "verb",
+        meaning_en: "to suggest indirectly",
+        translation_ru: "подразумевать",
+        ipa: "/ɪmˈplaɪ/",
+        pronunciation_hint_ru: "им-ПЛАЙ",
+        examples: ["This implies a problem."],
+        collocations: ["imply that"],
+        tags: ["manual"],
+        word_family: { verb: "imply", noun: "implication", adjective: "implicit", adverb: "implicitly", phrases: [], examples: [] }
+      })
+    } as unknown as AiProvider;
+
+    const service = new VocabularyService(prisma as never, aiProvider);
+    await service.createVocabularyCard("user-1", "imply");
+    await service.createVocabularyCard("user-1", "Imply");
+
+    expect(prisma.vocabularyItems).toHaveLength(1);
+    expect(prisma.wordFamilyItems).toHaveLength(1);
+    expect(prisma.vocabularyItems[0]).toMatchObject({ normalizedWord: "imply", source: "manual" });
   });
 });

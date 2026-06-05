@@ -282,7 +282,7 @@ model VocabularyItem {
   updatedAt           DateTime          @updatedAt
   wordFamily          WordFamilyItem?
 
-  @@index([userId, normalizedWord])
+  @@unique([userId, normalizedWord])
 }
 
 model WordFamilyItem {

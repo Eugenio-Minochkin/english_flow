@@ -46,35 +46,51 @@ export class VocabularyService {
   }
 
   async saveVocabularyCard(userId: string, card: VocabularyCardResult, source = "manual") {
-    const item = await this.prisma.vocabularyItem.create({
-      data: {
-        userId,
-        word: card.word,
-        normalizedWord: card.normalized_word,
-        partOfSpeech: card.part_of_speech,
-        meaningEn: card.meaning_en,
-        translationRu: card.translation_ru,
-        ipa: card.ipa,
-        pronunciationHintRu: card.pronunciation_hint_ru,
-        examples: card.examples,
-        collocations: card.collocations,
-        tags: card.tags,
-        source,
-        nextReviewAt: new Date()
-      }
+    const existing = await this.prisma.vocabularyItem.findFirst({
+      where: { userId, normalizedWord: card.normalized_word }
     });
+    const itemData = {
+      userId,
+      word: card.word,
+      normalizedWord: card.normalized_word,
+      partOfSpeech: card.part_of_speech,
+      meaningEn: card.meaning_en,
+      translationRu: card.translation_ru,
+      ipa: card.ipa,
+      pronunciationHintRu: card.pronunciation_hint_ru,
+      examples: card.examples,
+      collocations: card.collocations,
+      tags: card.tags,
+      source,
+      nextReviewAt: new Date()
+    };
+    const item = existing
+      ? await this.prisma.vocabularyItem.update({
+          where: { id: existing.id },
+          data: {
+            ...itemData,
+            source: existing.source,
+            status: "active"
+          }
+        })
+      : await this.prisma.vocabularyItem.create({
+          data: itemData
+        });
 
-    const family = await this.prisma.wordFamilyItem.create({
-      data: {
-        vocabularyItemId: item.id,
-        baseWord: card.normalized_word,
-        verb: card.word_family.verb,
-        noun: card.word_family.noun,
-        adjective: card.word_family.adjective,
-        adverb: card.word_family.adverb,
-        phrases: card.word_family.phrases ?? [],
-        examples: card.word_family.examples ?? []
-      }
+    const familyData = {
+      vocabularyItemId: item.id,
+      baseWord: card.normalized_word,
+      verb: card.word_family.verb,
+      noun: card.word_family.noun,
+      adjective: card.word_family.adjective,
+      adverb: card.word_family.adverb,
+      phrases: card.word_family.phrases ?? [],
+      examples: card.word_family.examples ?? []
+    };
+    const family = await this.prisma.wordFamilyItem.upsert({
+      where: { vocabularyItemId: item.id },
+      create: familyData,
+      update: familyData
     });
 
     await Promise.all([

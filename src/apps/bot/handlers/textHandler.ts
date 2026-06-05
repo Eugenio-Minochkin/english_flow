@@ -24,6 +24,8 @@ export function registerTextHandler(
     if (!ctx.englishFlowUser || ctx.message.text.startsWith("/")) return;
     const text = ctx.message.text.trim();
 
+    if (isMainMenuText(text) && (await handleMainMenuText(ctx, text, drillService, vocabularyService, stateService))) return;
+
     const state = await stateService.get(ctx.englishFlowUser.id);
     if (state?.state === "WAITING_FOR_WORD_INPUT") {
       const result = await vocabularyService.createVocabularyCard(ctx.englishFlowUser.id, text);
@@ -40,6 +42,7 @@ export function registerTextHandler(
       await ctx.reply(ruMessages.lessonImportSaved(result.createdCards.length));
       const firstCard = result.createdCards[0]?.card;
       if (firstCard) await ctx.reply(ruMessages.vocabularyCard(firstCard), { parse_mode: "HTML" });
+      await replyWithVocabularyMenu(ctx, vocabularyService, ctx.englishFlowUser.id);
       return;
     }
 
@@ -136,4 +139,8 @@ export function readScheduleWindows(value: unknown): string[] {
   if (!Array.isArray(value)) return ["morning", "afternoon", "evening"];
   const windows = value.filter((item): item is string => typeof item === "string");
   return windows.length ? windows : ["morning", "afternoon", "evening"];
+}
+
+export function isMainMenuText(text: string) {
+  return Object.values(mainMenuLabels).includes(text);
 }
