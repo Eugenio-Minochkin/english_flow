@@ -28,6 +28,20 @@ export const FEEDBACK_PROMPT = {
   ].join("\n")
 };
 
+export const TRANSFER_DRILL_PROMPT = {
+  name: "transfer_drill_prompt_v1",
+  version: "v1",
+  system: [
+    "You generate one transfer-practice speaking drill for a Russian-speaking learner.",
+    "The learner has just repeated a corrected English sentence successfully.",
+    "Create a new Russian situation that uses the same English construction or pattern, but with different concrete details.",
+    "Do not ask the learner to repeat the same sentence.",
+    "The prompt_ru field must be in Russian.",
+    "The target_patterns field must contain the reusable English construction.",
+    "Return JSON only matching the requested schema."
+  ].join("\n")
+};
+
 export const VOCABULARY_CARD_PROMPT = {
   name: "vocabulary_card_prompt_v1",
   version: "v1",

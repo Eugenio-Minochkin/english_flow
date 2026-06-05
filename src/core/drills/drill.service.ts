@@ -5,13 +5,14 @@ import type { AttemptFeedbackDto, RepeatResultDto, VoiceSubmissionDto } from "./
 import { env } from "../../utils/env.js";
 import { canSubmitVoiceToday, canUseAiToday } from "../../utils/costLimits.js";
 import { UserFacingError } from "../../utils/errors.js";
-import { FEEDBACK_PROMPT, DRILL_GENERATION_PROMPT } from "../../integrations/openai/prompts.js";
+import { FEEDBACK_PROMPT, DRILL_GENERATION_PROMPT, TRANSFER_DRILL_PROMPT } from "../../integrations/openai/prompts.js";
 import { feedbackSchema } from "../../integrations/openai/schemas.js";
 import { UserStateService } from "../state/userState.service.js";
 import { EventService } from "../events/event.service.js";
 import { VocabularyService } from "../vocabulary/vocabulary.service.js";
 import { PracticeItemService } from "../practice/practiceItem.service.js";
 import { compareRepeatToTarget } from "../practice/repeatCheck.js";
+import { logger } from "../../utils/logger.js";
 
 export class DrillService {
   private readonly stateService: UserStateService;
@@ -205,22 +206,104 @@ export class DrillService {
   }
 
   private async submitRepeatVoice(user: User, audioPath: string, payload: unknown): Promise<RepeatResultDto> {
-    const repeatPayload = payload as { betterVersionEn?: string } | null;
+    const repeatPayload = payload as { betterVersionEn?: string; practiceItemId?: string; canStartTransfer?: boolean } | null;
     const result = await this.sttProvider.transcribeAudio({ filePath: audioPath, languageMode: "ENGLISH_SPEECH" });
     await this.prisma.usageLog.create({
       data: { userId: user.id, provider: "deepgram", operation: "repeat_stt", units: Math.ceil(result.durationSeconds ?? 1) }
     });
-    const check = compareRepeatToTarget(result.text, repeatPayload?.betterVersionEn ?? "");
-    if (repeatPayload && typeof (repeatPayload as { practiceItemId?: unknown }).practiceItemId === "string") {
-      await this.practiceItemService.scheduleAfterResult((repeatPayload as { practiceItemId: string }).practiceItemId, check.success ? "success" : "fail");
+    const betterVersionEn = repeatPayload?.betterVersionEn ?? "";
+    const check = compareRepeatToTarget(result.text, betterVersionEn);
+    let practiceItem: { promptRu?: string | null } | null = null;
+    if (repeatPayload?.practiceItemId) {
+      practiceItem = await this.practiceItemService.scheduleAfterResult(repeatPayload.practiceItemId, check.success ? "success" : "fail");
     }
     await this.stateService.reset(user.id);
+    const transferDrill =
+      check.success && betterVersionEn && repeatPayload?.canStartTransfer !== false
+        ? await this.tryStartTransferDrill(user, {
+            sourcePromptRu: practiceItem?.promptRu ?? null,
+            targetAnswerEn: betterVersionEn
+          })
+        : null;
     await this.eventService.record("DRILL_REPEAT_SUBMITTED", user.id, { transcriptionPresent: Boolean(result.text), repeatScore: check.score, repeatSuccess: check.success });
     return {
       transcription: result.text,
-      betterVersionEn: repeatPayload?.betterVersionEn ?? "",
-      check
+      betterVersionEn,
+      check,
+      transferDrill
     };
+  }
+
+  private async tryStartTransferDrill(user: User, input: { sourcePromptRu: string | null; targetAnswerEn: string }) {
+    try {
+      return await this.startTransferDrill(user, input);
+    } catch (error) {
+      logger.warn(
+        {
+          userId: user.id,
+          errorName: error instanceof Error ? error.name : undefined,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        },
+        "transfer drill generation skipped"
+      );
+      return null;
+    }
+  }
+
+  private async startTransferDrill(user: User, input: { sourcePromptRu: string | null; targetAnswerEn: string }) {
+    const aiLimit = await canUseAiToday(this.prisma, user.id);
+    if (!aiLimit.allowed) return null;
+
+    const generated = await this.aiProvider.generateTransferDrill({
+      userId: user.id,
+      sourcePromptRu: input.sourcePromptRu,
+      targetAnswerEn: input.targetAnswerEn
+    });
+    await this.prisma.aiLog.create({
+      data: {
+        userId: user.id,
+        purpose: "transfer_drill_generation",
+        promptName: TRANSFER_DRILL_PROMPT.name,
+        promptVersion: TRANSFER_DRILL_PROMPT.version,
+        inputSummary: "Transfer drill generation after successful repeat",
+        outputJson: generated as object,
+        validationStatus: "valid",
+        model: env.OPENAI_MODEL
+      }
+    });
+    await this.prisma.usageLog.create({
+      data: { userId: user.id, provider: "openai", operation: "generate_transfer_drill", units: 1 }
+    });
+
+    const targetConstruction = generated.target_patterns[0] ?? generated.prompt_en ?? generated.expected_answer_notes ?? input.targetAnswerEn;
+    const drill = await this.prisma.drill.create({
+      data: {
+        userId: user.id,
+        type: "RU_TO_EN_SPEAKING",
+        promptRu: buildTransferPrompt(generated.prompt_ru, targetConstruction),
+        promptEn: generated.prompt_en,
+        targetWords: generated.target_words,
+        targetPatterns: generated.target_patterns.length ? generated.target_patterns : [input.targetAnswerEn],
+        targetGrammar: generated.target_grammar,
+        topic: generated.topic,
+        difficulty: generated.difficulty,
+        source: "transfer",
+        expectedAnswerNotes: generated.expected_answer_notes ?? `Use the same pattern as: ${input.targetAnswerEn}`
+      }
+    });
+    const session = await this.prisma.drillSession.create({
+      data: {
+        userId: user.id,
+        drillId: drill.id,
+        mode: "VOICE",
+        languageMode: "ENGLISH_SPEECH",
+        status: "ACTIVE",
+        startedAt: new Date()
+      }
+    });
+    await this.stateService.set(user.id, "WAITING_FOR_DRILL_ANSWER", { sessionId: session.id, isTransfer: true }, new Date(Date.now() + 30 * 60_000));
+    await this.eventService.record("TRANSFER_DRILL_STARTED", user.id, { drillId: drill.id, sessionId: session.id });
+    return { drillId: drill.id, sessionId: session.id, promptRu: drill.promptRu, mode: session.mode, languageMode: session.languageMode };
   }
 
   private async submitTranscribedAttempt(user: User, session: DrillSession, transcription: string, voiceFileId?: string): Promise<AttemptFeedbackDto> {
@@ -342,7 +425,7 @@ export class DrillService {
     await this.stateService.set(
       user.id,
       "WAITING_FOR_REPEAT",
-      { sessionId: session.id, practiceItemId: practiceItem.id, betterVersionEn: validated.better_version_en },
+      { sessionId: session.id, practiceItemId: practiceItem.id, betterVersionEn: validated.better_version_en, canStartTransfer: drill.source !== "transfer" },
       new Date(Date.now() + 30 * 60_000)
     );
     await this.eventService.record("ATTEMPT_SUBMITTED", user.id, { attemptId: attempt.id, sessionId: session.id });
@@ -388,6 +471,20 @@ function buildPracticePrompt(promptRu: string | null, targetAnswerEn: string) {
       .join("\n");
   }
   return ["Целевая конструкция:", targetAnswerEn, "", "Ответь голосом по-английски."].filter(Boolean).join("\n");
+}
+
+function buildTransferPrompt(promptRu: string, targetConstruction: string) {
+  return [
+    "Теперь применим это в новой ситуации.",
+    "",
+    "Идея:",
+    `«${promptRu}»`,
+    "",
+    "Целевая конструкция:",
+    targetConstruction,
+    "",
+    "Ответь голосом по-английски."
+  ].join("\n");
 }
 
 function jsonStringArray(value: unknown): string[] {

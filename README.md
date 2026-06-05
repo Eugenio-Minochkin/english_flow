@@ -33,7 +33,7 @@ After a checked attempt, the bot creates or updates one `PracticeItem`:
 - `MISTAKE` when the answer has a real issue, low grammar/naturalness score, or meaning mismatch.
 - `PHRASE` when the answer is good enough but the improved phrase is useful to review.
 
-The repeat step uses English STT and a simple token-overlap check against the corrected phrase. If the repeat is close enough, the practice item is scheduled farther out. If it is not close enough, the item stays weak and returns sooner.
+The repeat step uses English STT and a simple token-overlap check against the corrected phrase. If the repeat is close enough, the practice item is scheduled farther out and the bot automatically starts one transfer drill: a similar new Russian situation where the learner applies the same English pattern. If the repeat is not close enough, the item stays weak and returns sooner.
 
 Learning Loop v1 creates a `PracticeItem` after each checked attempt, and `/practice` uses due `PracticeItem` records before they return through scheduled reps.
 

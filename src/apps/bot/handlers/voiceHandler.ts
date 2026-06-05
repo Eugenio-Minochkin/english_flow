@@ -1,5 +1,6 @@
 import type { Bot } from "grammy";
 import type { DrillService } from "../../../core/drills/drill.service.js";
+import type { RepeatResultDto } from "../../../core/drills/drill.dto.js";
 import type { TelegramFileService } from "../../../integrations/telegram/telegramFile.service.js";
 import { env } from "../../../utils/env.js";
 import { UserFacingError } from "../../../utils/errors.js";
@@ -25,15 +26,7 @@ export function registerVoiceHandler(bot: Bot<BotContext>, drillService: DrillSe
       const audioPath = await fileService.downloadFile(voice.file_id);
       const submission = await drillService.submitVoiceMessage(ctx.englishFlowUser, voice.file_id, audioPath);
       if (submission.kind === "repeat_recorded") {
-        await ctx.reply(
-          submission.result.check.success
-            ? ruMessages.repeatCheckSuccess
-            : ruMessages.repeatCheckFail(submission.result.check.missingWords, submission.result.betterVersionEn),
-          {
-          parse_mode: "HTML",
-          reply_markup: mainActionKeyboard()
-          }
-        );
+        await replyToRepeatSubmission(ctx, submission.result);
         return;
       }
       await ctx.reply(ruMessages.feedback(submission.result.feedback), {
@@ -61,4 +54,17 @@ export function registerVoiceHandler(bot: Bot<BotContext>, drillService: DrillSe
       await ctx.reply(isAiError ? ruMessages.aiFailed : ruMessages.sttFailed);
     }
   });
+}
+
+export async function replyToRepeatSubmission(ctx: Pick<BotContext, "reply">, result: RepeatResultDto) {
+  const transferDrill = result.check.success ? result.transferDrill : null;
+  await ctx.reply(result.check.success ? ruMessages.repeatCheckSuccess : ruMessages.repeatCheckFail(result.check.missingWords, result.betterVersionEn), {
+    parse_mode: "HTML",
+    reply_markup: transferDrill ? undefined : mainActionKeyboard()
+  });
+
+  if (!transferDrill) return;
+
+  await ctx.reply(ruMessages.drillPrompt(transferDrill.promptRu), { parse_mode: "HTML" });
+  await ctx.reply(ruMessages.sendVoiceAnswer, { parse_mode: "HTML", reply_markup: feedbackActionKeyboard() });
 }

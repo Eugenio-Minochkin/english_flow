@@ -5,6 +5,7 @@ import type {
   DrillGenerationResult,
   FeedbackResult,
   GenerateDrillInput,
+  GenerateTransferDrillInput,
   TransformThoughtInput,
   ThoughtTransformResult,
   VocabularyCardResult
@@ -22,6 +23,21 @@ export class MockAiProvider implements AiProvider {
       topic: "speaking",
       difficulty: "A2-B1",
       expected_answer_notes: "Natural spoken sentence.",
+      follow_up_variations: []
+    };
+  }
+
+  async generateTransferDrill(input: GenerateTransferDrillInput): Promise<DrillGenerationResult> {
+    return {
+      type: "RU_TO_EN_SPEAKING",
+      prompt_ru: "Мне нужно объяснить идею проще, иначе команда не поймёт, что делать дальше.",
+      prompt_en: null,
+      target_words: ["explain", "otherwise"],
+      target_patterns: ["I need to ..., otherwise ..."],
+      target_grammar: [],
+      topic: "work",
+      difficulty: "A2-B1",
+      expected_answer_notes: `Use the same pattern as: ${input.targetAnswerEn}`,
       follow_up_variations: []
     };
   }

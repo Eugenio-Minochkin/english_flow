@@ -5,6 +5,12 @@ export type GenerateDrillInput = {
   type: DrillType;
 };
 
+export type GenerateTransferDrillInput = {
+  userId: string;
+  sourcePromptRu: string | null;
+  targetAnswerEn: string;
+};
+
 export type DrillGenerationResult = {
   type: "RU_TO_EN_SPEAKING";
   prompt_ru: string;
@@ -105,6 +111,7 @@ export interface TtsProvider {
 
 export interface AiProvider {
   generateDrill(input: GenerateDrillInput): Promise<DrillGenerationResult>;
+  generateTransferDrill(input: GenerateTransferDrillInput): Promise<DrillGenerationResult>;
   analyzeAttempt(input: AnalyzeAttemptInput): Promise<FeedbackResult>;
   createVocabularyCard(input: CreateVocabularyCardInput): Promise<VocabularyCardResult>;
   transformThought(input: TransformThoughtInput): Promise<ThoughtTransformResult>;
