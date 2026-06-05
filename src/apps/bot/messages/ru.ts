@@ -54,6 +54,7 @@ export const ruMessages = {
   askWordInput: "Напиши слово или фразу на английском, для которой сделать карточку.",
   askLessonImportInput: "Пришли слова после урока списком: через строки, запятые или точки с запятой.",
   wordSaved: "Карточка слова сохранена.",
+  noVocabularyForReview: "Пока нет слов для повторения. Добавь слово через «Слова».",
   scheduleSaved: "Расписание сохранено.",
   callbackSendVoiceRepeat: "Отправь голосовой повтор.",
   callbackUnknownAction: "Неизвестное действие.",

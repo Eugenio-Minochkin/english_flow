@@ -7,10 +7,21 @@ function createPrismaStub() {
   const wordFamilyItems: any[] = [];
   return {
     vocabularyItem: {
+      findFirst: async (_args: any) => null,
       create: async ({ data }: any) => {
         const row = { id: `vocab-${vocabularyItems.length + 1}`, ...data };
         vocabularyItems.push(row);
         return row;
+      },
+      update: async ({ where, data }: any) => {
+        const row = vocabularyItems.find((item) => item.id === where.id);
+        Object.assign(row, data);
+        return row;
+      },
+      updateMany: async ({ where, data }: any) => {
+        const rows = vocabularyItems.filter((item) => item.userId === where.userId && item.normalizedWord === where.normalizedWord);
+        rows.forEach((row) => Object.assign(row, data));
+        return { count: rows.length };
       }
     },
     wordFamilyItem: {
@@ -52,5 +63,31 @@ describe("VocabularyService", () => {
     expect(result.card.word).toBe("imply");
     expect(prisma.vocabularyItems).toHaveLength(1);
     expect(prisma.wordFamilyItems).toHaveLength(1);
+  });
+
+  test("picks the oldest due active vocabulary item for review", async () => {
+    const prisma = createPrismaStub();
+    prisma.vocabularyItems.push(
+      { id: "future", userId: "user-1", status: "active", nextReviewAt: new Date("2026-06-06T00:00:00.000Z"), createdAt: new Date("2026-06-01T00:00:00.000Z") },
+      {
+        id: "due",
+        userId: "user-1",
+        word: "imply",
+        normalizedWord: "imply",
+        translationRu: "подразумевать",
+        meaningEn: "to suggest something indirectly",
+        examples: ["This implies a problem."],
+        collocations: ["imply that"],
+        status: "active",
+        nextReviewAt: new Date("2026-06-04T00:00:00.000Z"),
+        createdAt: new Date("2026-06-02T00:00:00.000Z")
+      }
+    );
+    prisma.vocabularyItem.findFirst = async ({ where }: any) =>
+      prisma.vocabularyItems.find((item) => item.userId === where.userId && item.status === "active" && item.nextReviewAt <= new Date("2026-06-05T00:00:00.000Z"));
+
+    const item = await new VocabularyService(prisma as never, {} as never).pickDueVocabularyItem("user-1", new Date("2026-06-05T00:00:00.000Z"));
+
+    expect(item?.word).toBe("imply");
   });
 });

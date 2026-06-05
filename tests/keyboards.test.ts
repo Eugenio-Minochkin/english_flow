@@ -29,6 +29,7 @@ describe("Telegram action keyboards", () => {
       newDrill: "🎯 Новый подход",
       schedule: "🗓 Расписание",
       words: "🧩 Слова",
+      review: "🔁 Повторение",
       lessonImport: "📚 Импорт урока",
       stats: "📊 Статистика",
       settings: "⚙️ Настройки"

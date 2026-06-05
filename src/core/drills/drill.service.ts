@@ -1,5 +1,5 @@
 import { unlink } from "node:fs/promises";
-import type { DrillSession, PrismaClient, User } from "@prisma/client";
+import type { DrillSession, PrismaClient, User, VocabularyItem } from "@prisma/client";
 import type { AiProvider, SttProvider } from "./drill.types.js";
 import type { AttemptFeedbackDto, RepeatResultDto, VoiceSubmissionDto } from "./drill.dto.js";
 import { env } from "../../utils/env.js";
@@ -9,10 +9,12 @@ import { FEEDBACK_PROMPT, DRILL_GENERATION_PROMPT } from "../../integrations/ope
 import { feedbackSchema } from "../../integrations/openai/schemas.js";
 import { UserStateService } from "../state/userState.service.js";
 import { EventService } from "../events/event.service.js";
+import { VocabularyService } from "../vocabulary/vocabulary.service.js";
 
 export class DrillService {
   private readonly stateService: UserStateService;
   private readonly eventService: EventService;
+  private readonly vocabularyService: VocabularyService;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -21,6 +23,7 @@ export class DrillService {
   ) {
     this.stateService = new UserStateService(prisma);
     this.eventService = new EventService(prisma);
+    this.vocabularyService = new VocabularyService(prisma, aiProvider);
   }
 
   async startRuToEnDrill(user: User, options: { mode?: "VOICE" | "TEXT"; scheduledRepId?: string } = {}) {
@@ -72,6 +75,48 @@ export class DrillService {
     });
     await this.stateService.set(user.id, "WAITING_FOR_DRILL_ANSWER", { sessionId: session.id }, new Date(Date.now() + 30 * 60_000));
     await this.eventService.record("DRILL_STARTED", user.id, { drillId: drill.id, sessionId: session.id });
+    return { drillId: drill.id, sessionId: session.id, promptRu: drill.promptRu, mode: session.mode, languageMode: session.languageMode };
+  }
+
+  async startScheduledDrill(user: User, options: { mode?: "VOICE" | "TEXT"; scheduledRepId?: string } = {}) {
+    const vocabularyDrill = await this.startVocabularyDrill(user, options);
+    if (vocabularyDrill) return vocabularyDrill;
+    return this.startRuToEnDrill(user, options);
+  }
+
+  async startVocabularyDrill(user: User, options: { mode?: "VOICE" | "TEXT"; scheduledRepId?: string } = {}) {
+    const vocabularyItem = await this.vocabularyService.pickDueVocabularyItem(user.id);
+    if (!vocabularyItem) return null;
+
+    const promptRu = buildVocabularyPrompt(vocabularyItem);
+    const drill = await this.prisma.drill.create({
+      data: {
+        userId: user.id,
+        type: "VOCABULARY_IN_SPEECH",
+        promptRu,
+        promptEn: null,
+        targetWords: [vocabularyItem.normalizedWord],
+        targetPatterns: jsonStringArray(vocabularyItem.collocations),
+        targetGrammar: [],
+        topic: "vocabulary",
+        difficulty: null,
+        source: "vocabulary",
+        expectedAnswerNotes: `Use the target word naturally: ${vocabularyItem.normalizedWord}. Meaning: ${vocabularyItem.meaningEn}`
+      }
+    });
+    const session = await this.prisma.drillSession.create({
+      data: {
+        userId: user.id,
+        drillId: drill.id,
+        mode: options.mode ?? "VOICE",
+        languageMode: "ENGLISH_SPEECH",
+        scheduledRepId: options.scheduledRepId,
+        status: "ACTIVE",
+        startedAt: new Date()
+      }
+    });
+    await this.stateService.set(user.id, "WAITING_FOR_DRILL_ANSWER", { sessionId: session.id, vocabularyItemId: vocabularyItem.id }, new Date(Date.now() + 30 * 60_000));
+    await this.eventService.record("VOCABULARY_DRILL_STARTED", user.id, { drillId: drill.id, sessionId: session.id, vocabularyItemId: vocabularyItem.id });
     return { drillId: drill.id, sessionId: session.id, promptRu: drill.promptRu, mode: session.mode, languageMode: session.languageMode };
   }
 
@@ -189,15 +234,16 @@ export class DrillService {
         });
         throw retryParsed.error;
       }
-      return this.saveValidatedFeedback(user, session, attempt.id, transcription, retryParsed.data);
+      return this.saveValidatedFeedback(user, session, drill, attempt.id, transcription, retryParsed.data);
     }
     const validated = parsed.data;
-    return this.saveValidatedFeedback(user, session, attempt.id, transcription, validated);
+    return this.saveValidatedFeedback(user, session, drill, attempt.id, transcription, validated);
   }
 
   private async saveValidatedFeedback(
     user: User,
     session: DrillSession,
+    drill: Awaited<ReturnType<PrismaClient["drill"]["findUniqueOrThrow"]>>,
     attemptId: string,
     transcription: string,
     validated: ReturnType<typeof feedbackSchema.parse>
@@ -228,6 +274,11 @@ export class DrillService {
         naturalnessScore: validated.naturalness_score
       }
     });
+    if (drill.source === "vocabulary") {
+      const targetWords = Array.isArray(drill.targetWords) ? drill.targetWords.filter((value): value is string => typeof value === "string") : [];
+      const targetWord = targetWords[0];
+      if (targetWord) await this.vocabularyService.scheduleNextReviewByWord(user.id, targetWord);
+    }
     await this.prisma.drillSession.update({
       where: { id: session.id },
       data: { status: "COMPLETED", completedAt: new Date() }
@@ -248,4 +299,20 @@ export class DrillService {
       where: { id: payload.sessionId, userId, status: "ACTIVE" }
     });
   }
+}
+
+function buildVocabularyPrompt(item: VocabularyItem) {
+  const examples = Array.isArray(item.examples) ? item.examples.filter((value): value is string => typeof value === "string") : [];
+  const exampleHint = examples[0] ? ` Пример: ${examples[0]}` : "";
+  return [
+    `Скажи по-английски 1-2 предложения и обязательно используй слово «${item.normalizedWord}».`,
+    "",
+    `Смысл слова: ${item.translationRu}.`,
+    `Ситуация: расскажи что-то из работы, AI-проекта, общения или планов.${exampleHint}`
+  ].join("\n");
+}
+
+function jsonStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
 }

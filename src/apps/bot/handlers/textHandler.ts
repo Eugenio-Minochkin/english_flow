@@ -100,6 +100,17 @@ async function handleMainMenuText(
     return true;
   }
 
+  if (text === mainMenuLabels.review) {
+    const drill = await drillService.startVocabularyDrill(ctx.englishFlowUser);
+    if (!drill) {
+      await ctx.reply(ruMessages.noVocabularyForReview);
+      return true;
+    }
+    await ctx.reply(ruMessages.drillPrompt(drill.promptRu), { parse_mode: "HTML" });
+    await ctx.reply(ruMessages.sendVoiceAnswer, { parse_mode: "HTML", reply_markup: feedbackActionKeyboard() });
+    return true;
+  }
+
   if (text === mainMenuLabels.lessonImport) {
     await stateService.set(ctx.englishFlowUser.id, "WAITING_FOR_LESSON_AFTER_INPUT", {});
     await ctx.reply(ruMessages.askLessonImportInput);

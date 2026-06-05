@@ -34,7 +34,7 @@ export function createEnglishFlowBot() {
   registerWordCommand(bot, deps.vocabularyService);
   registerLessonAfterCommand(bot, deps.lessonImportService);
   registerThoughtCommand(bot);
-  registerReviewCommand(bot);
+  registerReviewCommand(bot, deps.drillService);
   registerStatsCommand(bot);
   registerSettingsCommand(bot);
   registerAdminCommands(bot, deps.scheduledRepService);

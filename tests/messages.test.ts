@@ -73,5 +73,6 @@ describe("Russian message templates", () => {
     ).toContain("<b>imply</b>");
     expect(ruMessages.askWordInput).toContain("слово");
     expect(ruMessages.askLessonImportInput).toContain("урока");
+    expect(ruMessages.noVocabularyForReview).toContain("слов");
   });
 });

@@ -39,7 +39,7 @@ export function registerCallbackHandler(bot: Bot<BotContext>, drillService: Dril
       await answerCallbackSafely(ctx);
       try {
         await scheduledRepService.startRep(scheduled.repId, "VOICE");
-        const drill = await drillService.startRuToEnDrill(ctx.englishFlowUser, { scheduledRepId: scheduled.repId });
+        const drill = await drillService.startScheduledDrill(ctx.englishFlowUser, { scheduledRepId: scheduled.repId });
         await scheduledRepService.attachDrill(scheduled.repId, drill.drillId);
         logger.info({ userId: ctx.englishFlowUser.id, drillId: drill.drillId, sessionId: drill.sessionId, scheduledRepId: scheduled.repId }, "scheduled drill started");
         await ctx.reply(ruMessages.drillPrompt(drill.promptRu), { parse_mode: "HTML" });
@@ -54,7 +54,7 @@ export function registerCallbackHandler(bot: Bot<BotContext>, drillService: Dril
       await answerCallbackSafely(ctx);
       try {
         await scheduledRepService.enableTextMode(scheduled.repId);
-        const drill = await drillService.startRuToEnDrill(ctx.englishFlowUser, { mode: "TEXT", scheduledRepId: scheduled.repId });
+        const drill = await drillService.startScheduledDrill(ctx.englishFlowUser, { mode: "TEXT", scheduledRepId: scheduled.repId });
         await scheduledRepService.attachDrill(scheduled.repId, drill.drillId);
         await ctx.reply(ruMessages.scheduledRepTextMode);
         await ctx.reply(ruMessages.drillPrompt(drill.promptRu), { parse_mode: "HTML" });

@@ -14,6 +14,7 @@ export const mainMenuLabels = {
   newDrill: "🎯 Новый подход",
   schedule: "🗓 Расписание",
   words: "🧩 Слова",
+  review: "🔁 Повторение",
   lessonImport: "📚 Импорт урока",
   stats: "📊 Статистика",
   settings: "⚙️ Настройки"
@@ -58,6 +59,8 @@ export function mainMenuKeyboard() {
     .text(mainMenuLabels.schedule)
     .row()
     .text(mainMenuLabels.words)
+    .text(mainMenuLabels.review)
+    .row()
     .text(mainMenuLabels.lessonImport)
     .row()
     .text(mainMenuLabels.stats)

@@ -12,6 +12,31 @@ export class VocabularyService {
     return this.saveVocabularyCard(userId, card, source);
   }
 
+  async pickDueVocabularyItem(userId: string, now = new Date()) {
+    return this.prisma.vocabularyItem.findFirst({
+      where: {
+        userId,
+        status: "active",
+        OR: [{ nextReviewAt: null }, { nextReviewAt: { lte: now } }]
+      },
+      orderBy: [{ nextReviewAt: "asc" }, { createdAt: "asc" }]
+    });
+  }
+
+  async scheduleNextReview(vocabularyItemId: string, now = new Date()) {
+    return this.prisma.vocabularyItem.update({
+      where: { id: vocabularyItemId },
+      data: { nextReviewAt: new Date(now.getTime() + 24 * 60 * 60 * 1000) }
+    });
+  }
+
+  async scheduleNextReviewByWord(userId: string, normalizedWord: string, now = new Date()) {
+    return this.prisma.vocabularyItem.updateMany({
+      where: { userId, normalizedWord, status: "active" },
+      data: { nextReviewAt: new Date(now.getTime() + 24 * 60 * 60 * 1000) }
+    });
+  }
+
   async saveVocabularyCard(userId: string, card: VocabularyCardResult, source = "manual") {
     const item = await this.prisma.vocabularyItem.create({
       data: {
@@ -26,7 +51,8 @@ export class VocabularyService {
         examples: card.examples,
         collocations: card.collocations,
         tags: card.tags,
-        source
+        source,
+        nextReviewAt: new Date()
       }
     });
 
