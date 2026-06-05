@@ -2,6 +2,7 @@ import type { Bot } from "grammy";
 import type { DrillService } from "../../../core/drills/drill.service.js";
 import type { ScheduledRepService } from "../../../core/scheduling/scheduledRep.service.js";
 import { UserStateService } from "../../../core/state/userState.service.js";
+import type { VocabularyService } from "../../../core/vocabulary/vocabulary.service.js";
 import { prisma } from "../../../db/prisma.js";
 import { UserFacingError } from "../../../utils/errors.js";
 import { logger } from "../../../utils/logger.js";
@@ -15,6 +16,7 @@ import {
 import { ruMessages } from "../messages/ru.js";
 import type { BotContext } from "../context.js";
 import { readScheduleWindows } from "./textHandler.js";
+import { handleVocabularyMenuCallback } from "../flows/vocabularyMenu.js";
 
 export function isExpiredCallbackQueryError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
@@ -30,10 +32,12 @@ async function answerCallbackSafely(ctx: BotContext, options?: Parameters<BotCon
   }
 }
 
-export function registerCallbackHandler(bot: Bot<BotContext>, drillService: DrillService, scheduledRepService: ScheduledRepService) {
+export function registerCallbackHandler(bot: Bot<BotContext>, drillService: DrillService, scheduledRepService: ScheduledRepService, vocabularyService: VocabularyService) {
   bot.on("callback_query:data", async (ctx) => {
     if (!ctx.englishFlowUser) return;
     const data = ctx.callbackQuery.data;
+    if (await handleVocabularyMenuCallback(ctx, data, vocabularyService, new UserStateService(prisma))) return;
+
     const scheduled = parseScheduledRepCallback(data);
     if (scheduled?.action === "start") {
       await answerCallbackSafely(ctx);

@@ -42,7 +42,7 @@ export function createEnglishFlowBot() {
   registerStatsCommand(bot);
   registerSettingsCommand(bot);
   registerAdminCommands(bot, deps.scheduledRepService);
-  registerCallbackHandler(bot, deps.drillService, deps.scheduledRepService);
+  registerCallbackHandler(bot, deps.drillService, deps.scheduledRepService, deps.vocabularyService);
   registerVoiceHandler(bot, deps.drillService, deps.telegramFileService);
   registerTextHandler(bot, deps.drillService, deps.vocabularyService, deps.lessonImportService, deps.scheduledRepService);
   bot.catch((err) => {

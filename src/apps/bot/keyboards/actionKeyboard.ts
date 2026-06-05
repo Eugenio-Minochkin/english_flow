@@ -30,6 +30,11 @@ export const actionCallbacks = {
   scheduledSkip: "scheduled:skip"
 };
 
+export const vocabularyCallbacks = {
+  add: "vocabulary:add",
+  list: "vocabulary:list"
+};
+
 export type ScheduledRepCallbackAction = "start" | "snooze" | "text_mode" | "skip";
 export type ScheduleSetupAction = "count" | "window" | "save";
 
@@ -104,4 +109,11 @@ export function scheduleSetupKeyboard() {
     .text("Вечер", scheduleSetupCallback("window", "evening"))
     .row()
     .text("Сохранить", scheduleSetupCallback("save"));
+}
+
+export function vocabularyMenuKeyboard() {
+  return new InlineKeyboard()
+    .text("➕ Добавить слово", vocabularyCallbacks.add)
+    .row()
+    .text("📚 Мои слова", vocabularyCallbacks.list);
 }

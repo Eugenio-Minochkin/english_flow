@@ -9,6 +9,7 @@ import { logger } from "../../../utils/logger.js";
 import { feedbackActionKeyboard, mainMenuLabels, scheduleSetupKeyboard } from "../keyboards/actionKeyboard.js";
 import { ruMessages } from "../messages/ru.js";
 import type { BotContext } from "../context.js";
+import { replyWithVocabularyMenu } from "../flows/vocabularyMenu.js";
 
 export function registerTextHandler(
   bot: Bot<BotContext>,
@@ -23,14 +24,13 @@ export function registerTextHandler(
     if (!ctx.englishFlowUser || ctx.message.text.startsWith("/")) return;
     const text = ctx.message.text.trim();
 
-    if (await handleMainMenuText(ctx, text, drillService, stateService)) return;
-
     const state = await stateService.get(ctx.englishFlowUser.id);
     if (state?.state === "WAITING_FOR_WORD_INPUT") {
       const result = await vocabularyService.createVocabularyCard(ctx.englishFlowUser.id, text);
       await stateService.reset(ctx.englishFlowUser.id);
       await ctx.reply(ruMessages.wordSaved);
       await ctx.reply(ruMessages.vocabularyCard(result.card), { parse_mode: "HTML" });
+      await replyWithVocabularyMenu(ctx, vocabularyService, ctx.englishFlowUser.id);
       return;
     }
 
@@ -42,6 +42,8 @@ export function registerTextHandler(
       if (firstCard) await ctx.reply(ruMessages.vocabularyCard(firstCard), { parse_mode: "HTML" });
       return;
     }
+
+    if (await handleMainMenuText(ctx, text, drillService, vocabularyService, stateService)) return;
 
     try {
       const result = await drillService.submitTextAttempt(ctx.englishFlowUser, text);
@@ -64,6 +66,7 @@ async function handleMainMenuText(
   ctx: BotContext,
   text: string,
   drillService: DrillService,
+  vocabularyService: VocabularyService,
   stateService: UserStateService
 ) {
   if (!ctx.englishFlowUser) return false;
@@ -95,8 +98,7 @@ async function handleMainMenuText(
   }
 
   if (text === mainMenuLabels.words) {
-    await stateService.set(ctx.englishFlowUser.id, "WAITING_FOR_WORD_INPUT", {});
-    await ctx.reply(ruMessages.askWordInput);
+    await replyWithVocabularyMenu(ctx, vocabularyService, ctx.englishFlowUser.id);
     return true;
   }
 
