@@ -1,0 +1,299 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DrillType {
+  RU_TO_EN_SPEAKING
+  SHADOWING
+  VOCABULARY_IN_SPEECH
+  WORD_FAMILY_GYM
+  PATTERN_GYM
+  GRAMMAR_UPGRADE
+  THOUGHT_TRANSFORMER
+  REVIEW
+}
+
+enum DrillSessionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum DrillMode {
+  VOICE
+  TEXT
+}
+
+enum LanguageMode {
+  ENGLISH_SPEECH
+  RUSSIAN_INPUT
+  AUTO
+}
+
+enum UserStateKind {
+  IDLE
+  WAITING_FOR_DRILL_ANSWER
+  WAITING_FOR_REPEAT
+  WAITING_FOR_WORD_INPUT
+  WAITING_FOR_LESSON_AFTER_INPUT
+  WAITING_FOR_THOUGHT_INPUT
+  WAITING_FOR_SHADOW_REPEAT
+  TEXT_MODE_ACTIVE
+}
+
+enum ScheduledRepStatus {
+  PLANNED
+  SENT
+  STARTED
+  SNOOZED
+  SKIPPED
+  COMPLETED
+  IGNORED
+  FAILED
+}
+
+model User {
+  id                   String         @id @default(cuid())
+  telegramId           BigInt         @unique
+  username             String?
+  firstName            String?
+  lastName             String?
+  photoUrl             String?
+  timezone             String         @default("Asia/Bangkok")
+  englishLevel         String?
+  goals                Json           @default("[]")
+  preferredTopics      Json           @default("[]")
+  dailyDrillCount      Int            @default(3)
+  firstWeekDrillCount  Int            @default(3)
+  scheduleWindows      Json           @default("[\"morning\",\"afternoon\",\"evening\"]")
+  scheduleAuto         Boolean        @default(true)
+  quietHoursStart      String         @default("22:00")
+  quietHoursEnd        String         @default("10:00")
+  feedbackStyle        String         @default("normal_plus_sometimes_strict")
+  voiceFirst           Boolean        @default(true)
+  textAllowed          Boolean        @default(true)
+  isPaused             Boolean        @default(false)
+  isAdmin              Boolean        @default(false)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  state                UserState?
+  drills               Drill[]
+  sessions             DrillSession[]
+  attempts             Attempt[]
+  aiLogs               AiLog[]
+  usageLogs            UsageLog[]
+  eventLogs            EventLog[]
+  dailyPlans           DailyPlan[]
+  scheduledReps        ScheduledRep[]
+  vocabularyItems      VocabularyItem[]
+  lessonImports        LessonImport[]
+}
+
+model UserState {
+  id        String        @id @default(cuid())
+  userId    String        @unique
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  state     UserStateKind @default(IDLE)
+  payload   Json          @default("{}")
+  expiresAt DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([userId])
+}
+
+model Drill {
+  id                  String         @id @default(cuid())
+  userId              String
+  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type                DrillType
+  promptRu            String
+  promptEn            String?
+  targetWords         Json           @default("[]")
+  targetPatterns      Json           @default("[]")
+  targetGrammar       Json           @default("[]")
+  topic               String?
+  difficulty          String?
+  source              String
+  expectedAnswerNotes String?
+  createdAt           DateTime       @default(now())
+  sessions            DrillSession[]
+
+  @@index([userId])
+}
+
+model DrillSession {
+  id             String             @id @default(cuid())
+  userId         String
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drillId        String
+  drill          Drill              @relation(fields: [drillId], references: [id], onDelete: Cascade)
+  status         DrillSessionStatus @default(ACTIVE)
+  mode           DrillMode          @default(VOICE)
+  languageMode   LanguageMode       @default(ENGLISH_SPEECH)
+  scheduledRepId String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  attempts       Attempt[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Attempt {
+  id                 String       @id @default(cuid())
+  userId             String
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drillSessionId     String
+  drillSession       DrillSession @relation(fields: [drillSessionId], references: [id], onDelete: Cascade)
+  voiceFileId        String?
+  audioUrl           String?
+  userText           String?
+  transcription      String?
+  feedbackJson       Json?
+  meaningScore       Int?
+  grammarScore       Int?
+  naturalnessScore   Int?
+  pronunciationScore Int?
+  createdAt          DateTime     @default(now())
+
+  @@index([userId])
+  @@index([drillSessionId])
+}
+
+model AiLog {
+  id               String   @id @default(cuid())
+  userId           String?
+  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  purpose          String
+  promptName       String
+  promptVersion    String
+  inputSummary     String
+  outputJson       Json?
+  validationStatus String
+  model            String
+  tokensInput      Int?
+  tokensOutput     Int?
+  costUsd          Decimal? @db.Decimal(10, 6)
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+}
+
+model UsageLog {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider         String
+  operation        String
+  units            Int
+  estimatedCostUsd Decimal? @db.Decimal(10, 6)
+  createdAt        DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model EventLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  eventType String
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model DailyPlan {
+  id               String         @id @default(cuid())
+  userId           String
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date             DateTime
+  timezone         String
+  targetDrillCount Int
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  scheduledReps    ScheduledRep[]
+
+  @@index([userId, date])
+}
+
+model ScheduledRep {
+  id          String             @id @default(cuid())
+  userId      String
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyPlanId String?
+  dailyPlan   DailyPlan?         @relation(fields: [dailyPlanId], references: [id], onDelete: SetNull)
+  scheduledAt DateTime
+  type        DrillType          @default(RU_TO_EN_SPEAKING)
+  status      ScheduledRepStatus @default(PLANNED)
+  drillId     String?
+  snoozeCount Int                @default(0)
+  reminderSentAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([userId, scheduledAt])
+  @@index([status, scheduledAt])
+}
+
+model VocabularyItem {
+  id                  String           @id @default(cuid())
+  userId              String
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word                String
+  normalizedWord      String
+  partOfSpeech        String?
+  meaningEn           String
+  translationRu       String
+  ipa                 String?
+  pronunciationHintRu String?
+  examples            Json             @default("[]")
+  collocations        Json             @default("[]")
+  tags                Json             @default("[]")
+  status              String            @default("active")
+  nextReviewAt        DateTime?
+  source              String            @default("manual")
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  wordFamily          WordFamilyItem?
+
+  @@index([userId, normalizedWord])
+}
+
+model WordFamilyItem {
+  id               String         @id @default(cuid())
+  vocabularyItemId String         @unique
+  vocabularyItem   VocabularyItem @relation(fields: [vocabularyItemId], references: [id], onDelete: Cascade)
+  baseWord         String
+  verb             String?
+  noun             String?
+  adjective        String?
+  adverb           String?
+  phrases          Json           @default("[]")
+  examples         Json           @default("[]")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model LessonImport {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rawInput     String
+  parsedWords  Json     @default("[]")
+  parsedTopics Json     @default("[]")
+  parsedErrors Json     @default("[]")
+  createdItems Json     @default("[]")
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
