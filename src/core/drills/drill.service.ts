@@ -10,11 +10,14 @@ import { feedbackSchema } from "../../integrations/openai/schemas.js";
 import { UserStateService } from "../state/userState.service.js";
 import { EventService } from "../events/event.service.js";
 import { VocabularyService } from "../vocabulary/vocabulary.service.js";
+import { PracticeItemService } from "../practice/practiceItem.service.js";
+import { compareRepeatToTarget } from "../practice/repeatCheck.js";
 
 export class DrillService {
   private readonly stateService: UserStateService;
   private readonly eventService: EventService;
   private readonly vocabularyService: VocabularyService;
+  private readonly practiceItemService: PracticeItemService;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -24,6 +27,7 @@ export class DrillService {
     this.stateService = new UserStateService(prisma);
     this.eventService = new EventService(prisma);
     this.vocabularyService = new VocabularyService(prisma, aiProvider);
+    this.practiceItemService = new PracticeItemService(prisma);
   }
 
   async startRuToEnDrill(user: User, options: { mode?: "VOICE" | "TEXT"; scheduledRepId?: string } = {}) {
@@ -79,6 +83,8 @@ export class DrillService {
   }
 
   async startScheduledDrill(user: User, options: { mode?: "VOICE" | "TEXT"; scheduledRepId?: string } = {}) {
+    const practiceDrill = await this.startPracticeDrill(user, options);
+    if (practiceDrill) return practiceDrill;
     const vocabularyDrill = await this.startVocabularyDrill(user, options);
     if (vocabularyDrill) return vocabularyDrill;
     return this.startRuToEnDrill(user, options);
@@ -117,6 +123,42 @@ export class DrillService {
     });
     await this.stateService.set(user.id, "WAITING_FOR_DRILL_ANSWER", { sessionId: session.id, vocabularyItemId: vocabularyItem.id }, new Date(Date.now() + 30 * 60_000));
     await this.eventService.record("VOCABULARY_DRILL_STARTED", user.id, { drillId: drill.id, sessionId: session.id, vocabularyItemId: vocabularyItem.id });
+    return { drillId: drill.id, sessionId: session.id, promptRu: drill.promptRu, mode: session.mode, languageMode: session.languageMode };
+  }
+
+  async startPracticeDrill(user: User, options: { mode?: "VOICE" | "TEXT"; scheduledRepId?: string } = {}) {
+    const practiceItem = await this.practiceItemService.pickDuePracticeItem(user.id);
+    if (!practiceItem) return null;
+    const targetAnswerEn = practiceItem.targetAnswerEn || practiceItem.betterVersionEn || "";
+    const promptRu = buildPracticePrompt(practiceItem.promptRu, targetAnswerEn);
+    const drill = await this.prisma.drill.create({
+      data: {
+        userId: user.id,
+        type: "REVIEW",
+        promptRu,
+        promptEn: targetAnswerEn || null,
+        targetWords: [],
+        targetPatterns: targetAnswerEn ? [targetAnswerEn] : [],
+        targetGrammar: [],
+        topic: "practice",
+        difficulty: null,
+        source: "practice_item",
+        expectedAnswerNotes: targetAnswerEn ? `Try to use this target answer: ${targetAnswerEn}` : null
+      }
+    });
+    const session = await this.prisma.drillSession.create({
+      data: {
+        userId: user.id,
+        drillId: drill.id,
+        mode: options.mode ?? "VOICE",
+        languageMode: "ENGLISH_SPEECH",
+        scheduledRepId: options.scheduledRepId,
+        status: "ACTIVE",
+        startedAt: new Date()
+      }
+    });
+    await this.stateService.set(user.id, "WAITING_FOR_DRILL_ANSWER", { sessionId: session.id, practiceItemId: practiceItem.id }, new Date(Date.now() + 30 * 60_000));
+    await this.eventService.record("PRACTICE_DRILL_STARTED", user.id, { drillId: drill.id, sessionId: session.id, practiceItemId: practiceItem.id });
     return { drillId: drill.id, sessionId: session.id, promptRu: drill.promptRu, mode: session.mode, languageMode: session.languageMode };
   }
 
@@ -168,11 +210,16 @@ export class DrillService {
     await this.prisma.usageLog.create({
       data: { userId: user.id, provider: "deepgram", operation: "repeat_stt", units: Math.ceil(result.durationSeconds ?? 1) }
     });
+    const check = compareRepeatToTarget(result.text, repeatPayload?.betterVersionEn ?? "");
+    if (repeatPayload && typeof (repeatPayload as { practiceItemId?: unknown }).practiceItemId === "string") {
+      await this.practiceItemService.scheduleAfterResult((repeatPayload as { practiceItemId: string }).practiceItemId, check.success ? "success" : "fail");
+    }
     await this.stateService.reset(user.id);
-    await this.eventService.record("DRILL_REPEAT_SUBMITTED", user.id, { transcriptionPresent: Boolean(result.text) });
+    await this.eventService.record("DRILL_REPEAT_SUBMITTED", user.id, { transcriptionPresent: Boolean(result.text), repeatScore: check.score, repeatSuccess: check.success });
     return {
       transcription: result.text,
-      betterVersionEn: repeatPayload?.betterVersionEn ?? ""
+      betterVersionEn: repeatPayload?.betterVersionEn ?? "",
+      check
     };
   }
 
@@ -274,6 +321,12 @@ export class DrillService {
         naturalnessScore: validated.naturalness_score
       }
     });
+    const practiceItem = await this.practiceItemService.createFromFeedback({
+      userId: user.id,
+      attemptId: attempt.id,
+      drill: { promptRu: drill.promptRu },
+      feedback: validated
+    });
     if (drill.source === "vocabulary") {
       const targetWords = Array.isArray(drill.targetWords) ? drill.targetWords.filter((value): value is string => typeof value === "string") : [];
       const targetWord = targetWords[0];
@@ -283,7 +336,15 @@ export class DrillService {
       where: { id: session.id },
       data: { status: "COMPLETED", completedAt: new Date() }
     });
-    await this.stateService.set(user.id, "WAITING_FOR_REPEAT", { sessionId: session.id, betterVersionEn: validated.better_version_en }, new Date(Date.now() + 30 * 60_000));
+    if (session.scheduledRepId) {
+      await this.prisma.scheduledRep.update({ where: { id: session.scheduledRepId }, data: { status: "COMPLETED" } });
+    }
+    await this.stateService.set(
+      user.id,
+      "WAITING_FOR_REPEAT",
+      { sessionId: session.id, practiceItemId: practiceItem.id, betterVersionEn: validated.better_version_en },
+      new Date(Date.now() + 30 * 60_000)
+    );
     await this.eventService.record("ATTEMPT_SUBMITTED", user.id, { attemptId: attempt.id, sessionId: session.id });
     await this.eventService.record("FEEDBACK_GENERATED", user.id, { attemptId: attempt.id });
     return { attemptId: attempt.id, transcription, feedback: validated };
@@ -310,6 +371,13 @@ function buildVocabularyPrompt(item: VocabularyItem) {
     `Смысл слова: ${item.translationRu}.`,
     `Ситуация: расскажи что-то из работы, AI-проекта, общения или планов.${exampleHint}`
   ].join("\n");
+}
+
+function buildPracticePrompt(promptRu: string | null, targetAnswerEn: string) {
+  if (promptRu) {
+    return [`Скажи по-английски:`, "", `«${promptRu}»`, "", `Постарайся использовать:`, targetAnswerEn].filter(Boolean).join("\n");
+  }
+  return ["Повтори идею по-английски, используя эту конструкцию:", targetAnswerEn].filter(Boolean).join("\n");
 }
 
 function jsonStringArray(value: unknown): string[] {

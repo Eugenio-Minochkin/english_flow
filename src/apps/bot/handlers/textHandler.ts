@@ -101,7 +101,7 @@ async function handleMainMenuText(
   }
 
   if (text === mainMenuLabels.review) {
-    const drill = await drillService.startVocabularyDrill(ctx.englishFlowUser);
+    const drill = (await drillService.startPracticeDrill(ctx.englishFlowUser)) ?? (await drillService.startVocabularyDrill(ctx.englishFlowUser));
     if (!drill) {
       await ctx.reply(ruMessages.noVocabularyForReview);
       return true;

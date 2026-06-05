@@ -19,6 +19,15 @@ function formatList(items: string[] | undefined) {
   return items?.length ? items.map(escapeHtml).join(", ") : "—";
 }
 
+function formatReviewDate(date: Date) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  if (target <= today) return "сегодня";
+  if (target <= today + 24 * 60 * 60 * 1000) return "завтра";
+  return date.toLocaleDateString("ru-RU");
+}
+
 export const ruMessages = {
   accessDenied: "Доступ запрещён.",
   start: "Привет. Это English Flow: короткие голосовые подходы для английского. Кнопки уже в меню снизу.",
@@ -27,6 +36,8 @@ export const ruMessages = {
     "/start — начать",
     "/drill — новый 60-секундный подход",
     "/word — добавить слово",
+    "/words — показать мои слова",
+    "/practice — повторить фразы и ошибки",
     "/lesson_after — импорт слов после урока",
     "/help — помощь",
     "",
@@ -39,6 +50,22 @@ export const ruMessages = {
   waitingRepeat: "Отлично. Теперь повтори улучшенную фразу голосом или нажми «Новый подход» для нового подхода.",
   noActiveDrill: "Сейчас нет активного подхода. Нажми «Новый подход», чтобы начать.",
   repeatAcceptedText: "Повтор принят. Для нового подхода нажми «Новый подход».",
+  repeatCheckSuccess: [
+    "✅ <b>Повтор засчитан.</b>",
+    "",
+    "Я верну похожую конструкцию позже, чтобы закрепить."
+  ].join("\n"),
+  repeatCheckFail(missingWords: string[], betterVersionEn: string) {
+    return [
+      "Почти, но фраза ещё не звучит стабильно.",
+      "",
+      `Не хватило:\n${missingWords.length ? missingWords.map(escapeHtml).join(", ") : "ключевых слов из целевой фразы"}`,
+      "",
+      `Повтори вслух 3 раза, не записывая:\n${escapeHtml(betterVersionEn)}`,
+      "",
+      "Я верну эту фразу позже."
+    ].join("\n");
+  },
   sttFailed: "Не смог разобрать аудио. Попробуй ещё раз или используй текстовый режим.",
   aiFailed: "Ответ записал, но сейчас не смог нормально проверить. Попробуй ещё раз позже.",
   limitAi: "На сегодня лимит AI-проверок исчерпан. Можно продолжить завтра или использовать текстовый режим без анализа.",
@@ -55,6 +82,15 @@ export const ruMessages = {
   askLessonImportInput: "Пришли слова после урока списком: через строки, запятые или точки с запятой.",
   wordSaved: "Карточка слова сохранена.",
   noVocabularyForReview: "Пока нет слов для повторения. Добавь слово через «Слова».",
+  noPracticeForReview: "Пока нет фраз для повторения.",
+  wordsList(words: Array<{ word: string; translationRu: string; status: string; nextReviewAt: Date | null }>) {
+    if (words.length === 0) return "Пока слов нет. Добавь слово через /word.";
+    const rows = words.map((word, index) => {
+      const review = word.nextReviewAt ? ` — повтор: ${formatReviewDate(word.nextReviewAt)}` : "";
+      return `${index + 1}. ${escapeHtml(word.word)} — ${escapeHtml(word.translationRu)} — ${escapeHtml(word.status)}${review}`;
+    });
+    return [`📚 <b>Мои слова: ${words.length}</b>`, "", ...rows].join("\n");
+  },
   scheduleSaved: "Расписание сохранено.",
   callbackSendVoiceRepeat: "Отправь голосовой повтор.",
   callbackUnknownAction: "Неизвестное действие.",
@@ -144,6 +180,8 @@ export const ruMessages = {
       `🎯 <b>Главная правка:</b>\n${escapeHtml(feedback.main_issue_ru)}`,
       "",
       `💬 <b>Лучше:</b>\n${escapeHtml(feedback.better_version_en)}`,
+      "",
+      `🎙 <b>Задание:</b>\n${escapeHtml(feedback.repeat_task_ru)}`,
       "",
       `🧠 <b>Почему:</b>\n${escapeHtml(feedback.short_explanation_ru)}`,
       "",

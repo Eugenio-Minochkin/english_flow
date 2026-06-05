@@ -23,6 +23,14 @@ export class VocabularyService {
     });
   }
 
+  async listLatestVocabularyItems(userId: string, limit = 20) {
+    return this.prisma.vocabularyItem.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: limit
+    });
+  }
+
   async scheduleNextReview(vocabularyItemId: string, now = new Date()) {
     return this.prisma.vocabularyItem.update({
       where: { id: vocabularyItemId },

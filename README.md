@@ -8,11 +8,12 @@ User-facing bot messages are in Russian. English appears only as learning conten
 
 ## Current Status
 
-Milestone 1 is implemented:
+Learning Loop v1 is implemented:
 
 - Fastify app with `GET /health`.
-- grammY Telegram bot with `/start`, `/help`, `/drill`, text/voice handlers, and future command stubs.
+- grammY Telegram bot with `/start`, `/help`, `/drill`, `/word`, `/words`, `/practice`, `/review`, text/voice handlers, and future command stubs.
 - Prisma/PostgreSQL schema for `User`, `Drill`, `DrillSession`, `Attempt`, `UserState`, `AiLog`, `UsageLog`, and `EventLog`.
+- Practice memory through `PracticeItem` for corrected phrases, mistakes, vocabulary, pronunciation targets, and patterns that should return later.
 - Telegram allowlist via `ALLOWED_TELEGRAM_IDS`.
 - Provider interfaces for AI, STT, and TTS.
 - OpenAI drill generation and feedback validation through Zod.
@@ -20,6 +21,21 @@ Milestone 1 is implemented:
 - Temporary audio deletion after STT.
 - Mock providers for development/tests when real keys are absent.
 - Docker Compose with `app`, `worker`, and `postgres`.
+
+## Learning Loop v1
+
+The main loop is:
+
+`short speaking rep` -> `useful correction` -> `oral repetition` -> `saved practice memory` -> `future review`.
+
+After a checked attempt, the bot creates or updates one `PracticeItem`:
+
+- `MISTAKE` when the answer has a real issue, low grammar/naturalness score, or meaning mismatch.
+- `PHRASE` when the answer is good enough but the improved phrase is useful to review.
+
+The repeat step uses English STT and a simple token-overlap check against the corrected phrase. If the repeat is close enough, the practice item is scheduled farther out. If it is not close enough, the item stays weak and returns sooner.
+
+User-facing Telegram UX is Russian. English appears only as learning content: target phrases, better versions, examples, vocabulary, and patterns.
 
 ## Local Setup
 
@@ -89,6 +105,12 @@ Run only the bot:
 npm run bot
 ```
 
+Production start after `npm run build`:
+
+```bash
+npm start
+```
+
 Run only the API:
 
 ```bash
@@ -108,6 +130,15 @@ Services:
 - `app`: Fastify backend plus Telegram webhook or polling startup.
 - `worker`: separate worker process placeholder for scheduled reps.
 - `postgres`: PostgreSQL used by Prisma and future pg-boss jobs.
+
+## Bot Commands
+
+- `/drill` - start a new speaking rep.
+- `/word` - add a vocabulary card.
+- `/words` - show the latest 20 saved vocabulary items.
+- `/practice` - start a due PracticeItem review.
+- `/review` - review priority: due PracticeItem first, then due vocabulary item.
+- `/lesson_after` - import lesson vocabulary.
 
 ## Telegram Webhook
 
@@ -161,12 +192,10 @@ Tests use mocks and do not call OpenAI or Deepgram.
 
 ## Next Milestones
 
-1. Scheduled reps with pg-boss.
-2. Vocabulary and lesson import.
-3. Spaced repetition and weak spots.
-4. Thought transformer.
-5. Shadowing with TTS.
-6. Telegram Mini App API readiness.
+1. Improve spaced repetition decisions and weak spots.
+2. Thought transformer.
+3. Shadowing with TTS.
+4. Telegram Mini App API readiness.
 
 ## Backups
 

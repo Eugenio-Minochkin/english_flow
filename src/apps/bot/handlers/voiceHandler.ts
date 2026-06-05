@@ -25,10 +25,15 @@ export function registerVoiceHandler(bot: Bot<BotContext>, drillService: DrillSe
       const audioPath = await fileService.downloadFile(voice.file_id);
       const submission = await drillService.submitVoiceMessage(ctx.englishFlowUser, voice.file_id, audioPath);
       if (submission.kind === "repeat_recorded") {
-        await ctx.reply(ruMessages.repeatAccepted(submission.result.transcription, submission.result.betterVersionEn), {
+        await ctx.reply(
+          submission.result.check.success
+            ? ruMessages.repeatCheckSuccess
+            : ruMessages.repeatCheckFail(submission.result.check.missingWords, submission.result.betterVersionEn),
+          {
           parse_mode: "HTML",
           reply_markup: mainActionKeyboard()
-        });
+          }
+        );
         return;
       }
       await ctx.reply(ruMessages.feedback(submission.result.feedback), {

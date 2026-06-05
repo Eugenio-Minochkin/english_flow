@@ -1,3 +1,4 @@
+import type { RepeatCheckResult } from "../practice/repeatCheck.js";
 import type { FeedbackResult } from "./drill.types.js";
 
 export type DrillDto = {
@@ -17,6 +18,7 @@ export type AttemptFeedbackDto = {
 export type RepeatResultDto = {
   transcription: string;
   betterVersionEn: string;
+  check: RepeatCheckResult;
 };
 
 export type VoiceSubmissionDto =

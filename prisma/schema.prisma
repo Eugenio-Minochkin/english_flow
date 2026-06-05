@@ -58,6 +58,21 @@ enum ScheduledRepStatus {
   FAILED
 }
 
+enum PracticeItemType {
+  VOCABULARY
+  PHRASE
+  MISTAKE
+  PRONUNCIATION
+  PATTERN
+}
+
+enum PracticeItemStatus {
+  WEAK
+  LEARNING
+  ACTIVE
+  MASTERED
+}
+
 model User {
   id                   String         @id @default(cuid())
   telegramId           BigInt         @unique
@@ -93,6 +108,7 @@ model User {
   scheduledReps        ScheduledRep[]
   vocabularyItems      VocabularyItem[]
   lessonImports        LessonImport[]
+  practiceItems        PracticeItem[]
 }
 
 model UserState {
@@ -296,4 +312,31 @@ model LessonImport {
   createdAt    DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+model PracticeItem {
+  id                     String             @id @default(cuid())
+  userId                 String
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type                   PracticeItemType
+  status                 PracticeItemStatus @default(WEAK)
+  promptRu               String?
+  targetAnswerEn         String?
+  betterVersionEn        String?
+  sourceAttemptId        String?
+  sourceVocabularyItemId String?
+  mistakeType            String?
+  mistakeNoteRu          String?
+  pronunciationTarget    String?
+  nextReviewAt           DateTime?
+  successCount           Int                @default(0)
+  failureCount           Int                @default(0)
+  lastSeenAt             DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([userId, nextReviewAt])
+  @@index([userId, status])
+  @@index([sourceAttemptId])
+  @@index([sourceVocabularyItemId])
 }

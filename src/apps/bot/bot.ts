@@ -13,6 +13,8 @@ import { registerWordCommand } from "./commands/word.js";
 import { registerLessonAfterCommand } from "./commands/lessonAfter.js";
 import { registerThoughtCommand } from "./commands/thought.js";
 import { registerReviewCommand } from "./commands/review.js";
+import { registerPracticeCommand } from "./commands/practice.js";
+import { registerWordsCommand } from "./commands/words.js";
 import { registerStatsCommand } from "./commands/stats.js";
 import { registerSettingsCommand } from "./commands/settings.js";
 import { registerVoiceHandler } from "./handlers/voiceHandler.js";
@@ -35,6 +37,8 @@ export function createEnglishFlowBot() {
   registerLessonAfterCommand(bot, deps.lessonImportService);
   registerThoughtCommand(bot);
   registerReviewCommand(bot, deps.drillService);
+  registerPracticeCommand(bot, deps.drillService);
+  registerWordsCommand(bot, deps.vocabularyService);
   registerStatsCommand(bot);
   registerSettingsCommand(bot);
   registerAdminCommands(bot, deps.scheduledRepService);

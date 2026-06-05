@@ -4,12 +4,12 @@ import { feedbackActionKeyboard } from "../keyboards/actionKeyboard.js";
 import type { BotContext } from "../context.js";
 import { ruMessages } from "../messages/ru.js";
 
-export function registerReviewCommand(bot: Bot<BotContext>, drillService: DrillService) {
-  bot.command("review", async (ctx) => {
+export function registerPracticeCommand(bot: Bot<BotContext>, drillService: DrillService) {
+  bot.command("practice", async (ctx) => {
     if (!ctx.englishFlowUser) return;
-    const drill = (await drillService.startPracticeDrill(ctx.englishFlowUser)) ?? (await drillService.startVocabularyDrill(ctx.englishFlowUser));
+    const drill = await drillService.startPracticeDrill(ctx.englishFlowUser);
     if (!drill) {
-      await ctx.reply(ruMessages.noVocabularyForReview);
+      await ctx.reply(ruMessages.noPracticeForReview);
       return;
     }
     await ctx.reply(ruMessages.drillPrompt(drill.promptRu), { parse_mode: "HTML" });

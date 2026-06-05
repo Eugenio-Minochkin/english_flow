@@ -29,6 +29,7 @@ function createPrismaStub() {
     aiLog: { create: async ({ data }: any) => data },
     eventLog: { create: async ({ data }: any) => data },
     userState: { upsert: async ({ update }: any) => update },
+    practiceItem: { findMany: async () => [] },
     vocabularyItem: {
       findFirst: async () => vocabularyItems[0],
       update: async ({ where, data }: any) => {
