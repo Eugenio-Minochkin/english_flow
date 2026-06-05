@@ -4,5 +4,7 @@ dist
 tmp
 *.log
 .env
+.env.production
+.deploy
 .worktrees
 worktrees

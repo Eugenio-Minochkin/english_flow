@@ -1,6 +1,8 @@
 node_modules
 dist
 .env
+.env.production
+.deploy
 .DS_Store
 coverage
 tmp
