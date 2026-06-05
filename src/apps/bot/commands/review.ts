@@ -9,7 +9,7 @@ export function registerReviewCommand(bot: Bot<BotContext>, drillService: DrillS
     if (!ctx.englishFlowUser) return;
     const drill = (await drillService.startPracticeDrill(ctx.englishFlowUser)) ?? (await drillService.startVocabularyDrill(ctx.englishFlowUser));
     if (!drill) {
-      await ctx.reply(ruMessages.noVocabularyForReview);
+      await ctx.reply(ruMessages.noPracticeOrVocabularyForReview);
       return;
     }
     await ctx.reply(ruMessages.drillPrompt(drill.promptRu), { parse_mode: "HTML" });

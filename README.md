@@ -35,6 +35,8 @@ After a checked attempt, the bot creates or updates one `PracticeItem`:
 
 The repeat step uses English STT and a simple token-overlap check against the corrected phrase. If the repeat is close enough, the practice item is scheduled farther out. If it is not close enough, the item stays weak and returns sooner.
 
+Learning Loop v1 creates a `PracticeItem` after each checked attempt, and `/practice` uses due `PracticeItem` records before they return through scheduled reps.
+
 User-facing Telegram UX is Russian. English appears only as learning content: target phrases, better versions, examples, vocabulary, and patterns.
 
 ## Local Setup
@@ -127,6 +129,7 @@ docker compose up --build
 
 Services:
 
+- `migrate`: runs `npx prisma migrate deploy` before app processes start.
 - `app`: Fastify backend plus Telegram webhook or polling startup.
 - `worker`: separate worker process placeholder for scheduled reps.
 - `postgres`: PostgreSQL used by Prisma and future pg-boss jobs.

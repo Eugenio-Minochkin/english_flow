@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { DrillService } from "../src/core/drills/drill.service.js";
 import type { AiProvider, SttProvider } from "../src/core/drills/drill.types.js";
 
-function createPrismaStub() {
+function createPrismaStub(): any {
   const drills: any[] = [];
   const sessions: any[] = [];
   const vocabularyItems = [
@@ -72,5 +72,32 @@ describe("vocabulary speaking drills", () => {
       source: "vocabulary"
     });
     expect(prisma.sessions[0].scheduledRepId).toBe("rep-1");
+  });
+
+  test("practice drill prompt does not duplicate the common heading and tells user to answer by voice", async () => {
+    const prisma = createPrismaStub();
+    prisma.practiceItem.findMany = async () => [
+      {
+        id: "practice-1",
+        userId: "user-1",
+        status: "WEAK",
+        promptRu: "Я не успел закончить задачу до звонка.",
+        targetAnswerEn: "I didn't manage to finish the task before the call.",
+        betterVersionEn: "I didn't manage to finish the task before the call.",
+        nextReviewAt: new Date("2026-06-05T00:00:00.000Z"),
+        createdAt: new Date("2026-06-05T00:00:00.000Z")
+      }
+    ];
+    const aiProvider = { generateDrill: async () => ({}) } as unknown as AiProvider;
+    const sttProvider = {} as SttProvider;
+
+    const drill = await new DrillService(prisma as never, aiProvider, sttProvider).startPracticeDrill({ id: "user-1" } as never);
+
+    expect(drill?.promptRu).not.toContain("Скажи по-английски:");
+    expect(drill?.promptRu).toContain("Идея:");
+    expect(drill?.promptRu).toContain("Я не успел закончить задачу до звонка.");
+    expect(drill?.promptRu).toContain("Целевая конструкция:");
+    expect(drill?.promptRu).toContain("I didn't manage to finish the task before the call.");
+    expect(drill?.promptRu).toContain("Ответь голосом");
   });
 });

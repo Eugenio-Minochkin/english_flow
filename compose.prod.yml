@@ -1,4 +1,24 @@
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    restart: "no"
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TELEGRAM_BOT_TOKEN: ""
+      TELEGRAM_WEBHOOK_SECRET: ""
+      TELEGRAM_WEBHOOK_URL: ""
+      OPENAI_API_KEY: ""
+      DEEPGRAM_API_KEY: ""
+    command: sh -c "npx prisma migrate deploy"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -15,12 +35,12 @@ services:
       TELEGRAM_WEBHOOK_URL: ""
       OPENAI_API_KEY: ""
       DEEPGRAM_API_KEY: ""
-    command: sh -c "npx prisma migrate deploy && node dist/src/apps/api/server.js"
+    command: sh -c "node dist/src/apps/api/server.js"
     ports:
       - "127.0.0.1:${HOST_API_PORT:-3001}:3000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   bot:
     build:
@@ -34,10 +54,10 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       TELEGRAM_WEBHOOK_URL: ""
       TELEGRAM_WEBHOOK_SECRET: ""
-    command: sh -c "npx prisma migrate deploy && node dist/src/apps/bot/bot.js"
+    command: sh -c "node dist/src/apps/bot/bot.js"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -51,10 +71,10 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       TELEGRAM_WEBHOOK_URL: ""
       TELEGRAM_WEBHOOK_SECRET: ""
-    command: sh -c "npx prisma migrate deploy && node dist/src/apps/worker/worker.js"
+    command: sh -c "node dist/src/apps/worker/worker.js"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   postgres:
     image: postgres:16-alpine

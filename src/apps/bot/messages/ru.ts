@@ -83,6 +83,7 @@ export const ruMessages = {
   wordSaved: "Карточка слова сохранена.",
   noVocabularyForReview: "Пока нет слов для повторения. Добавь слово через «Слова».",
   noPracticeForReview: "Пока нет фраз для повторения.",
+  noPracticeOrVocabularyForReview: "Пока нет фраз или слов для повторения.",
   wordsList(words: Array<{ word: string; translationRu: string; status: string; nextReviewAt: Date | null }>) {
     if (words.length === 0) return "Пока слов нет. Добавь слово через /word.";
     const rows = words.map((word, index) => {
@@ -182,6 +183,8 @@ export const ruMessages = {
       `💬 <b>Лучше:</b>\n${escapeHtml(feedback.better_version_en)}`,
       "",
       `🎙 <b>Задание:</b>\n${escapeHtml(feedback.repeat_task_ru)}`,
+      "",
+      "Сначала повтори фразу вслух 3 раза без записи. Потом отправь один голосовой повтор для проверки.",
       "",
       `🧠 <b>Почему:</b>\n${escapeHtml(feedback.short_explanation_ru)}`,
       "",

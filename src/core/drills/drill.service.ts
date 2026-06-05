@@ -375,9 +375,19 @@ function buildVocabularyPrompt(item: VocabularyItem) {
 
 function buildPracticePrompt(promptRu: string | null, targetAnswerEn: string) {
   if (promptRu) {
-    return [`Скажи по-английски:`, "", `«${promptRu}»`, "", `Постарайся использовать:`, targetAnswerEn].filter(Boolean).join("\n");
+    return [
+      "Идея:",
+      `«${promptRu}»`,
+      "",
+      "Целевая конструкция:",
+      targetAnswerEn,
+      "",
+      "Ответь голосом по-английски."
+    ]
+      .filter(Boolean)
+      .join("\n");
   }
-  return ["Повтори идею по-английски, используя эту конструкцию:", targetAnswerEn].filter(Boolean).join("\n");
+  return ["Целевая конструкция:", targetAnswerEn, "", "Ответь голосом по-английски."].filter(Boolean).join("\n");
 }
 
 function jsonStringArray(value: unknown): string[] {

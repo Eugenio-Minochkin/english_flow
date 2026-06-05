@@ -36,6 +36,8 @@ describe("Russian message templates", () => {
     expect(message).toContain("🎯 <b>Главная правка:</b>");
     expect(message).toContain("🧠 <b>Почему:</b>");
     expect(message).toContain("🎙 <b>Теперь повтори:</b>");
+    expect(message).toContain("Сначала повтори фразу вслух 3 раза без записи.");
+    expect(message).toContain("Потом отправь один голосовой повтор для проверки.");
     expect(message).toContain("I've been working on this AI project all day.");
   });
 
@@ -74,5 +76,6 @@ describe("Russian message templates", () => {
     expect(ruMessages.askWordInput).toContain("слово");
     expect(ruMessages.askLessonImportInput).toContain("урока");
     expect(ruMessages.noVocabularyForReview).toContain("слов");
+    expect(ruMessages.noPracticeOrVocabularyForReview).toBe("Пока нет фраз или слов для повторения.");
   });
 });

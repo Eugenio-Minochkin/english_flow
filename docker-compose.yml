@@ -15,6 +15,25 @@ services:
       timeout: 5s
       retries: 10
 
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/english_flow
+      TELEGRAM_BOT_TOKEN: ""
+      TELEGRAM_WEBHOOK_SECRET: ""
+      TELEGRAM_WEBHOOK_URL: ""
+      OPENAI_API_KEY: ""
+      DEEPGRAM_API_KEY: ""
+    command: sh -c "npx prisma migrate deploy"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   app:
     build:
       context: .
@@ -24,12 +43,12 @@ services:
         required: false
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/english_flow
-    command: sh -c "npx prisma migrate deploy && node dist/src/main.js"
+    command: sh -c "node dist/src/main.js"
     ports:
       - "3000:3000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -45,10 +64,10 @@ services:
       TELEGRAM_WEBHOOK_URL: ""
       OPENAI_API_KEY: ""
       DEEPGRAM_API_KEY: ""
-    command: sh -c "npx prisma migrate deploy && node dist/src/apps/worker/worker.js"
+    command: sh -c "node dist/src/apps/worker/worker.js"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:
